@@ -1,9 +1,14 @@
 
-# Welcome to your CDK Python project!
+# Welcome to AWS Tag Manager CDK Python project!
 
-This is a blank project for Python development with CDK.
+The AWS CDK Toolkit is installed with the Node Package Manager. In most cases, AWS recommend installing it globally. 
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+```
+npm install -g aws-cdk             # install latest version
+npm install -g aws-cdk@X.YY.Z      # install specific version
+```
+
+## Once you clone the project and get it downloaded locally
 
 This project is set up like a standard Python project.  The initialization
 process also creates a virtualenv within this project, stored under the `.venv`
@@ -12,14 +17,13 @@ directory.  To create the virtualenv it assumes that there is a `python3`
 package. If for any reason the automatic creation of the virtualenv fails,
 you can create the virtualenv manually.
 
-To manually create a virtualenv on MacOS and Linux:
+Before you start with CDK you need to initialize Python virtualenv on MacOS and Linux:
 
 ```
 $ python3 -m venv .venv
 ```
 
-After the init process completes and the virtualenv is created, you can use the following
-step to activate your virtualenv.
+After the init process completes and the virtualenv is created, you can need to activate your virtualenv.
 
 ```
 $ source .venv/bin/activate
@@ -39,6 +43,11 @@ $ pip install -r requirements.txt
 
 At this point you can now synthesize the CloudFormation template for this code.
 
+```
+$ cdk synth
+```
+
+To deploy the project
 ```
 $ cdk synth
 ```
