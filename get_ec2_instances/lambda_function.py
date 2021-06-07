@@ -2,7 +2,7 @@ import json
 import logging
 import boto3
 import os
-
+from botocore.exceptions import ClientError
 
 cmdb_table = os.environ['CMDB_TABLE']
 issues_table = os.environ['ISSUES_TABLE']
@@ -39,7 +39,63 @@ TAG_TO_VALIDATE ="AppName"
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+#===========================================================================
+# issue_exists
+#===========================================================================
+def issue_exists(instanceId, dynamodb=None):
+    if not dynamodb:
+        dynamodb = boto3.resource('dynamodb')
 
+    table = dynamodb.Table(issues_table)
+
+    try:
+        response = table.get_item(Key={'instanceId':instanceId})
+    except ClientError as e:
+        print(e.response['Error']['Message'])
+    else:
+        logger.info("issue_exists('%s'), returning '%s' ", instanceId, json.dumps(response['Item']))
+        
+    return "Item" in response
+
+#===========================================================================
+# create_new_issue
+#===========================================================================
+def create_new_issue(ec2Instance, keyName, issueDescription, dynamodb=None):
+    if not dynamodb:
+        dynamodb = boto3.resource('dynamodb')
+
+    table = dynamodb.Table(issues_table)
+    
+    response = table.put_item(
+       Item={
+            'instanceId': ec2Instance.instance_id,
+            'instance_type': ec2Instance.instance_type,
+            'vpc_id' : ec2Instance.vpc_id,
+            'launch_time' : ec2Instance.launch_time.strftime("%m/%d/%Y, %H:%M:%S"),
+            'keyName': keyName,
+            'issueDescription' : issueDescription
+        }
+    )
+    return response
+
+#===========================================================================
+# check_tag_cmdb_value
+#===========================================================================
+def check_tag_cmdb_value(tagValue, dynamodb=None):
+    if not dynamodb:
+        dynamodb = boto3.resource('dynamodb')
+
+    table = dynamodb.Table(cmdb_table)
+
+    try:
+        response = table.get_item(Key={'applicationId':tagValue})
+    except ClientError as e:
+        print(e.response['Error']['Message'])
+    else:
+        logger.info("check_tag_cmdb_value('%s'), returning '%s' ", tagValue, json.dumps(response))
+        
+        return "Item" in response
+    
 def handler(event, context):
     logger.info('## EVENT')
     logger.info(json.dumps(event))
@@ -50,15 +106,27 @@ def handler(event, context):
     logger.info("Instance %s is in %s state", instance_id, instance_state)
     
     ec2instance = ec2.Instance(instance_id)
-    instanceAppName = ''
+    instanceAppId = ''
     for tags in ec2instance.tags:
         if tags["Key"] == TAG_TO_VALIDATE:
-            instanceAppName = tags["Value"]
+            instanceAppId = tags["Value"]
             
-    logger.info("Instance '%s', tag '%s' value is '%s'", instance_id, TAG_TO_VALIDATE, instanceAppName)
+    logger.info("Instance '%s', tag '%s' value is '%s'", instance_id, TAG_TO_VALIDATE, instanceAppId)
     
-    if '' == instanceAppName :
-        # check if this instance has already been flagged
-        dynamodb.get_item(TableName=issues_table, Key={'instanceId':{'S':instance_id}})
+    issueDescription = ""
+    if '' == instanceAppId :
+        issueDescription = "Value of the tag '" + TAG_TO_VALIDATE +"' is '" + instanceAppId +"' [EMPTY]."
+    else:
+        cmdbResponse = check_tag_cmdb_value(instanceAppId)
+        if cmdbResponse :
+            logger.info("No Actions Required: instance %s has tag value of %s which is valid AppName", instance_id, instanceAppId)
+            return
+        else:
+            issueDescription = "Value of the tag '" + TAG_TO_VALIDATE +"' is '" + instanceAppId +"' but its not present in CMDB table."
+            logger.info("check_tag_cmdb_value returned %s", cmdbResponse)
+        
     
-    #dynamodb.put_item(TableName='fruitSalad', Item={'fruitName':{'S':'Banana'},'key2':{'N':'value2'}})
+    logger.info("Instance doesnt have correct tag value, recording it in issues table ")
+    create_new_issue(ec2instance, TAG_TO_VALIDATE, issueDescription)
+    
+   
